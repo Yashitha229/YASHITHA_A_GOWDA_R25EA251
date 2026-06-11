@@ -1,1 +1,70 @@
-prompt
+Here is your complete, fully integrated assignment report. The detailed structural breakdown of the CRUD operations and the refresh pipeline has been smoothly merged into the master document.
+
+---
+
+# 2D Graphics Editor: Development Report
+
+## 1. Project Initialization & Architecture
+
+* **Objective:** Create a text-based graphics editor that stores shapes as independent data objects rather than static pixels, allowing for seamless modification and deletion.
+* **The Prompt:** Design a 2D graphics editor using a 2D array (`canvas`) to manage primitive shapes including lines, rectangles, triangles, and circles.
+* **The Solution:** We chose an architectural approach inspired by Object-Oriented design within procedural C. Instead of a destructive "draw-once" system where pixels are permanently overwritten, we decoupled the **Data Layer** from the **Display Layer**. We engineered a `struct Object` to store unique geometry attributes and a state tracking ID. This structural separation allowed us to build a dynamic rendering pipeline (`redrawAllObjects()`) that cleanly repaints the canvas on demand.
+
+---
+
+## 2. Implementing Logic (Bresenham’s & Midpoint)
+
+* **Objective:** Ensure geometric shapes are rasterized accurately, continuously, and efficiently on a discrete, character-based terminal grid.
+* **The Iteration:** Our initial versions explored basic loops and standard trigonometric functions for plotting pixels.
+* **The Refinement:** * **For Lines:** We implemented **Bresenham’s Line Algorithm**. This approach utilizes integer-only error increments, completely bypassing expensive floating-point arithmetic. It guarantees a perfectly continuous mathematical path of characters without pixel drops.
+* **For Circles:** Moving away from standard trigonometry ($\sin$/$\cos$), which inherently caused rounding errors and left empty "gaps" in the perimeter, we integrated the **Midpoint Circle Algorithm**. This plots eight symmetric points per step using pure integer math, yielding a solid, unbroken round boundary.
+
+
+
+---
+
+## 3. Feature Set: CRUD Operations & Structural Breakthroughs
+
+* **Objective:** Enable the user to interactively Create, Read, Update, and Delete shapes within the live session.
+
+During development, we solved a fundamental limitation regarding how raw 2D coordinate matrices manage memory. In a standard 2D character array, writing an asterisk (`*`) directly to a location destroys the underlying character. If shapes overlap, deleting one shape would accidentally erase portions of another intersecting shape, leaving a permanently corrupted canvas. We resolved this by building a dedicated object tracking pipeline:
+
+* **Create (Add):** Instead of modifying the canvas characters immediately during entry, `addObject()` packages the user's geometric inputs into an `Object` struct, stamps it with a sequential, unique tracking `nextId`, and appends it to a global object database array.
+* **Read (Display/List):** Reading tasks are decoupled for safety. `listObjects()` loops through our data buffer to show the user exactly which IDs are currently registered, while `displayCanvas()` prints the actual character-based visual matrix to the terminal window.
+* **Update (Modify):** Because shapes are stored as raw numeric attributes rather than static character marks, modifying a shape is as simple as targeting its specific index using `findObjectIndexById()` and directly updating its fields.
+* **Delete (Remove):** Shifting array elements in C is computationally expensive and changes existing tracking indexes. To bypass this, we implemented a **"Soft Delete"** mechanism. When an object is deleted, we toggle its internal boolean flag (`obj.active = 0`).
+
+### The Refresh Pipeline
+
+The engine driving these CRUD operations is the **Redraw Pipeline** (`redrawAllObjects()`). Whenever a shape is added, modified, or deleted, the application performs a sequence of operations:
+
+1. It calls `clearCanvas()`, resetting the entire display matrix back to uniform underscores (`_`).
+2. It loops systematically through the `objects` database array from index `0` up to `objectCount`.
+3. If an object's `active` flag equals `1`, its respective drawing algorithm executes, safely drawing onto the canvas space via `plotPoint()`. If `active` equals `0`, it is skipped.
+
+This lifecycle cleanly eliminates the overlapping shape problem: wiping and re-rendering the scene from scratch ensures that removing an upper shape automatically restores any background pixels that were previously hidden by the overlap.
+
+---
+
+## 4. Debugging & Geometric Validation
+
+* **Objective:** Resolve coordinate visual bugs, specifically addressing the "Missing Triangle" anomaly.
+* **The Prompt:** During testing, triangle inputs failed to render a closed three-sided structure, instead showing up as a single, standard line.
+* **The Discovery:** Analyzing the execution logs revealed that the chosen validation coordinates—$(2,2)$, $(4,4)$, and $(6,6)$—were mathematically **collinear**.
+* **The Fix:** The underlying rasterizer logic was working perfectly, but the selected spatial properties forced the geometry to collapse into a single line vector. We validated the function by passing non-collinear, wide coordinates—such as $(30,5)$, $(10,20)$, and $(50,20)$—which confirmed that the `drawTriangle()` architecture (calling `drawLine` sequentially across three unique coordinate pairs) was entirely sound.
+
+---
+
+## 5. Final Code Hardening
+
+* **Objective:** Prevent memory leaks, compilation warnings, and undefined compiler behaviors.
+* **Refinement:** We corrected a critical pointer casting flaw inside `addObject()`, where a `scanf` call treated an `enum` address directly as a standard `int*`. Because enum sizes can vary depending on compiler optimizations, this risked stack corruption. We replaced this with a localized, dedicated integer buffer (`typeChoice`) to intercept inputs, validate them against our constraints, and then cast them safely to the `ObjectType` enumeration. This keeps the application stable across distinct platforms and development environments.
+
+---
+
+## Summary of Final Technical Specs
+
+* **Grid Size:** $60 \times 25$ characters.
+* **Language:** C (Standard Library, `stdio.h`, `stdlib.h`, `math.h`).
+* **Algorithm Base:** Integer-only arithmetic (Bresenham's and Midpoint Circle) for maximized execution speeds and pixel consistency.
+* **Storage Matrix:** Static array-based object buffer supporting an application threshold of up to 50 concurrent tracking shapes.
